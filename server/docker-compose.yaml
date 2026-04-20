@@ -1,0 +1,26 @@
+networks: 
+  galoper:
+    driver: bridge
+
+volumes: []
+
+services:
+
+  ############################################ Logging #######################################################
+  loki:
+    image: grafana/loki:3.7.1
+    container_name: loki
+    privileged: true
+    user: root
+    volumes:
+      - ./config/loki:/etc/loki/config:ro
+      - ./data/loki:/tmp/loki
+    command:
+      - '-config.file=/etc/loki/config/loki-config.yaml'
+    restart: always
+    expose:
+      - 3100
+    networks:
+      - galoper
+    labels:
+      org.label-schema.group: 'observability'

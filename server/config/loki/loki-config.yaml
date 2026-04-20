@@ -1,0 +1,94 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /tmp/loki
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+limits_config:
+  metric_aggregation_enabled: true
+  enable_multi_variant_queries: true
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  max_query_lookback: 672h
+  retention_period: 672h
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /tmp/loki/tsdb-index
+    cache_location: /tmp/loki/tsdb-cache
+    cache_ttl: 24h
+  filesystem:
+    directory: /tmp/loki/chunks
+
+compactor:
+  working_directory: /tmp/loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /tmp/loki/rules
+  rule_path: /tmp/loki/rules-temp
+  alertmanager_url: http://localhost:9093
+
+frontend:
+  encoding: protobuf
+
+# -----------------------------------------------------------------------------
+# GCS object store (inactive): to use later, replace schema_config, storage_config,
+# and compactor sections above with the following, and in docker-compose set
+# LOKI_GCS_BUCKET plus -config.expand-env=true (and GCP credentials as needed).
+# -----------------------------------------------------------------------------
+# schema_config:
+#   configs:
+#     - from: 2020-10-24
+#       store: tsdb
+#       object_store: gcs
+#       schema: v13
+#       index:
+#         prefix: index_
+#         period: 24h
+#
+# storage_config:
+#   tsdb_shipper:
+#     active_index_directory: /tmp/loki/tsdb-index
+#     cache_location: /tmp/loki/tsdb-cache
+#     cache_ttl: 24h
+#   gcs:
+#     bucket_name: ${LOKI_GCS_BUCKET}
+#
+# compactor:
+#   working_directory: /tmp/loki/compactor
+#   compaction_interval: 10m
+#   retention_enabled: true
+#   retention_delete_delay: 2h
+#   delete_request_store: gcs
