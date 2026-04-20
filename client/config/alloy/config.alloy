@@ -1,0 +1,108 @@
+logging {
+	level = "debug"
+}
+
+loki.write "hub" {
+	endpoint {
+		url = sys.env("LOKI_URL")
+	}
+	external_labels = {
+		client   = sys.env("CLIENT"),
+		instance = sys.env("INSTANCE"),
+	}
+}
+
+// Ingest logs from http //
+loki.source.api "ingest" {
+	http {
+		listen_address = "0.0.0.0"
+		listen_port    = 9999
+	}
+	forward_to = [loki.write.hub.receiver]
+}
+
+// Host logs //
+local.file_match "host" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/var/log/*.log",
+		job         = "host",
+	}]
+}
+
+loki.source.file "host" {
+	legacy_positions_file = "/tmp/alloy/positions-host.yaml"
+	targets               = local.file_match.host.targets
+	forward_to            = [loki.write.hub.receiver]
+}
+
+// SymmetricDS logs //
+// SymmetricDS default layout: "2006-01-02 15:04:05,000 LEVEL [engine] [Logger] [thread] message"
+local.file_match "symmetric" {
+	path_targets = [{
+		__address__ = "localhost",
+		__path__    = "/opt/symmetric/logs/**/*.log",
+		job         = "symmetric",
+	}]
+}
+
+loki.source.file "symmetric" {
+	legacy_positions_file = "/tmp/alloy/positions-symmetric.yaml"
+	targets               = local.file_match.symmetric.targets
+	forward_to            = [loki.process.symmetric.receiver]
+}
+
+loki.process "symmetric" {
+	stage.multiline {
+		firstline     = "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} "
+		max_wait_time = "3s"
+	}
+
+	stage.match {
+		selector = "{job=\"symmetric\"} |~ \"^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} \""
+
+		stage.regex {
+			expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}) (?P<level>\\S+) \\[(?P<engine>[^\\]]*)\\] \\[(?P<logger>[^\\]]+)\\] \\[(?P<thread>[^\\]]+)\\] (?P<msg>[\\s\\S]*)$"
+		}
+
+		stage.template {
+			source   = "ts_dot"
+			template = "{{ Replace .timestamp \",\" \".\" -1 }}"
+		}
+
+		stage.timestamp {
+			source            = "ts_dot"
+			format            = "2006-01-02 15:04:05.000"
+			location          = "Local"
+			action_on_failure = "fudge"
+		}
+
+		stage.labels {
+			values = {"level" = "level"}
+		}
+
+		stage.template {
+			source   = "json_out"
+			template = "{{ dict \"service\" \"symmetricds\" \"timestamp\" .timestamp \"level\" .level \"engine\" .engine \"logger\" .logger \"thread\" .thread \"message\" .msg | toJson }}"
+		}
+
+		stage.output {
+			source = "json_out"
+		}
+	}
+
+	stage.match {
+		selector = "{job=\"symmetric\"} !~ \"^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} \""
+
+		stage.template {
+			source   = "json_out"
+			template = "{{ dict \"service\" \"symmetricds\" \"format\" \"raw\" \"line\" .Entry | toJson }}"
+		}
+
+		stage.output {
+			source = "json_out"
+		}
+	}
+
+	forward_to = [loki.write.hub.receiver]
+}

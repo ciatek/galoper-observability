@@ -1,0 +1,36 @@
+networks: 
+  galoper:
+    driver: bridge
+
+volumes: []
+
+services:
+  alloy:
+    image: grafana/alloy:v1.15.1
+    user: root
+    privileged: true
+    container_name: alloy
+    environment:
+      LOKI_URL: ${LOKI_URL}
+      CLIENT: ${CLIENT}
+      INSTANCE: ${INSTANCE}
+    volumes:
+      - ./config/alloy:/etc/alloy
+      - ./data/alloy:/tmp/alloy
+      - /var/log:/var/log
+      - /opt/symmetric/logs:/opt/symmetric/logs:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers
+    expose:
+      - 12345 # dashboard port
+      - 51893 # syslog
+      - 4318  # oltp http
+      - 8027  # app receiver
+      - 9999  # logs http
+    networks:
+      - galoper
+    restart: unless-stopped
+    labels:
+      org.label-schema.group: 'observability'
+    extra_hosts:
+      - "host.docker.internal: 172.17.0.1"
+
