@@ -59,7 +59,7 @@ loki.process "symmetric" {
 	}
 
 	stage.match {
-		selector = "{job=\"symmetric\"} |~ \"^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} \""
+		selector = "{job=\"symmetric\"} |~ \"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} \""
 
 		stage.regex {
 			expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}) (?P<level>\\S+) \\[(?P<engine>[^\\]]*)\\] \\[(?P<logger>[^\\]]+)\\] \\[(?P<thread>[^\\]]+)\\] (?P<msg>[\\s\\S]*)$"
@@ -92,7 +92,7 @@ loki.process "symmetric" {
 	}
 
 	stage.match {
-		selector = "{job=\"symmetric\"} !~ \"^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3} \""
+		selector = "{job=\"symmetric\"} !~ \"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} \""
 
 		stage.template {
 			source   = "json_out"
