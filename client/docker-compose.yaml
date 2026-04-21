@@ -2,8 +2,6 @@ networks:
   galoper:
     driver: bridge
 
-volumes: []
-
 services:
   alloy:
     image: grafana/alloy:v1.15.1
