@@ -3,6 +3,26 @@ networks:
     driver: bridge
 
 services:
+  ############################################# Visualization ################################################
+  grafana:
+    image: grafana/grafana:13.0
+    container_name: grafana
+    user: root
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./data/grafana/:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-oncall-app,grafana-llm-app
+    restart: unless-stopped
+    expose:
+      - 3000
+    networks:
+      - galoper
+    labels:
+      org.label-schema.group: 'observability'
 
   ############################################ Logging #######################################################
   loki:
