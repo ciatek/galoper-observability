@@ -59,11 +59,12 @@ loki.process "symmetric" {
 		max_wait_time = "3s"
 	}
 
+	// Parsed branch: standard Symmetric log lines.
 	stage.match {
 		selector = "{job=\"symmetric\"} |~ \"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} \""
 
 		stage.regex {
-			expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}) (?P<level>\\S+) \\[(?P<engine>[^\\]]*)\\] \\[(?P<logger>[^\\]]+)\\] \\[(?P<thread>[^\\]]+)\\] (?P<msg>[\\s\\S]*)$"
+			expression = "^(?P<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2},\\d{3}) (?P<level>DEBUG|INFO|WARN|ERROR|TRACE|FATAL) \\[(?P<engine>[^\\]]*)\\] \\[(?P<logger>[^\\]]+)\\] \\[(?P<thread>[^\\]]+)\\] (?P<msg>[\\s\\S]*)$"
 		}
 
 		stage.template {
@@ -78,34 +79,27 @@ loki.process "symmetric" {
 			action_on_failure = "fudge"
 		}
 
-		stage.labels {
-			values = {"level" = "level"}
+		// Per-log fields attached as structured metadata. Loki auto-derives
+		// `detected_level` from the `level` key here, giving uniform semantics
+		// across every source without making `level` a stream label.
+		stage.structured_metadata {
+			values = {
+				level  = "level",
+				engine = "engine",
+				logger = "logger",
+				thread = "thread",
+			}
 		}
 
-		stage.template {
-			source   = "json_out"
-			template = "{{ dict \"service\" \"symmetricds\" \"format\" \"parsed\" \"timestamp\" .timestamp \"level\" .level \"engine\" .engine \"logger\" .logger \"thread\" .thread \"message\" .msg | toJson }}"
-		}
-
+		// Replace the line with just the message; other fields live in metadata.
 		stage.output {
-			source = "json_out"
+			source = "msg"
 		}
 	}
 
-	// Only true leftovers: not a Symmetric first line and not JSON from the branch above.
-	// Use ^[{] not ^\\{ — LogQL rejects backslash-brace as an invalid escape in selectors.
-	stage.match {
-		selector = "{job=\"symmetric\"} !~ \"^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} \" !~ \"^[{]\""
-
-		stage.template {
-			source   = "json_out"
-			template = "{{ dict \"service\" \"symmetricds\" \"format\" \"raw\" \"line\" .Entry | toJson }}"
-		}
-
-		stage.output {
-			source = "json_out"
-		}
-	}
+	// Lines that don't start with a Symmetric timestamp (e.g. startup banners, stray
+	// stdout) fall through untouched — they still reach Loki with the stream labels
+	// from local.file_match.symmetric, just without parsed fields / metadata.
 
 	forward_to = [loki.write.hub.receiver]
 }
